@@ -1,0 +1,56 @@
+name: travel-harness
+services:
+  etcd:
+    image: gcr.io/etcd-development/etcd:v3.5.33
+    command:
+      - etcd
+      - --data-dir=/var/lib/milvus/etcd
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --quota-backend-bytes=4294967296
+      - --auto-compaction-mode=revision
+      - --auto-compaction-retention=1000
+    volumes: [milvus:/var/lib/milvus]
+    healthcheck:
+      test: [CMD, etcdctl, --endpoints=http://127.0.0.1:2379, endpoint, health]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  milvus:
+    image: milvusdb/milvus:v3.0.2
+    command: [milvus, run, standalone]
+    security_opt: [seccomp:unconfined]
+    environment:
+      ETCD_USE_EMBED: "false"
+      ETCD_ENDPOINTS: etcd:2379
+      COMMON_STORAGETYPE: local
+      DEPLOY_MODE: STANDALONE
+    volumes:
+      - milvus:/var/lib/milvus
+    depends_on:
+      etcd: {condition: service_healthy}
+    ports:
+      - "127.0.0.1:${MILVUS_PORT:-19530}:19530"
+      - "127.0.0.1:${MILVUS_HEALTH_PORT:-9091}:9091"
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:9091/healthz]
+      interval: 10s
+      start_period: 90s
+      timeout: 8s
+      retries: 8
+  attu:
+    image: zilliz/attu:v3.0.0
+    environment:
+      MILVUS_URL: milvus:19530
+      ATTU_AUTH_MODE: none
+    ports: ["127.0.0.1:${ATTU_PORT:-8001}:3000"]
+    depends_on:
+      milvus: {condition: service_healthy}
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v6.0.0
+    profiles: [routing]
+    command: osrm-routed --algorithm mld /data/region.osrm
+    volumes: [./osrm-data:/data:ro]
+    ports: ["127.0.0.1:${OSRM_PORT:-5000}:5000"]
+volumes:
+  milvus:

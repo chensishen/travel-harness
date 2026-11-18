@@ -1,0 +1,6 @@
+name: travel-harness
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12.11
+  - pip

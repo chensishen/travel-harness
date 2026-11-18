@@ -1,0 +1,1 @@
+"""PPTX template inspection helpers."""
